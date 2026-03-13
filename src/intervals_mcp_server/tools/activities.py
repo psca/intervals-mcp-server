@@ -312,7 +312,9 @@ async def get_activity_streams(
         stream_type = stream.get("type", "unknown")
         stream_name = stream.get("name", stream_type)
         data = stream.get("data", [])
+        data2 = stream.get("data2", [])
         value_type = stream.get("valueType", "")
+        is_latlng = stream_type == "latlng"
 
         streams_summary += f"Stream: {stream_name} ({stream_type})\n"
         streams_summary += f"  Value Type: {value_type}\n"
@@ -320,13 +322,20 @@ async def get_activity_streams(
 
         # Show first few and last few data points for preview
         if data:
+            data_label = "  Lat" if is_latlng else "  Values"
             if len(data) <= 10:
-                streams_summary += f"  Values: {data}\n"
+                streams_summary += f"{data_label}: {data}\n"
             else:
-                preview_start = data[:5]
-                preview_end = data[-5:]
-                streams_summary += f"  First 5 values: {preview_start}\n"
-                streams_summary += f"  Last 5 values: {preview_end}\n"
+                streams_summary += f"{data_label} first 5: {data[:5]}\n"
+                streams_summary += f"{data_label} last 5: {data[-5:]}\n"
+
+        if data2:
+            lng_label = "  Lng" if is_latlng else "  Data2"
+            if len(data2) <= 10:
+                streams_summary += f"{lng_label}: {data2}\n"
+            else:
+                streams_summary += f"{lng_label} first 5: {data2[:5]}\n"
+                streams_summary += f"{lng_label} last 5: {data2[-5:]}\n"
 
         streams_summary += "\n"
 
