@@ -4,6 +4,7 @@ Activity-related MCP tools for Intervals.icu.
 This module contains tools for retrieving and managing athlete activities.
 """
 
+import json
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -340,3 +341,93 @@ async def get_activity_streams(
         streams_summary += "\n"
 
     return streams_summary
+
+
+@mcp.tool()
+async def get_activity_stream_sampled(
+    activity_id: str,
+    stream_types: str,
+    interval_seconds: int = 1800,
+    api_key: str | None = None,
+) -> str:
+    """Get sampled stream data for a specific activity from Intervals.icu
+
+    Returns every Nth data point from the requested streams as JSON, where N = interval_seconds.
+    Designed for weather analysis: fetch GPS coordinates and bearing at regular intervals (default
+    30 min) without returning the full stream, avoiding token cost and MCP response truncation.
+
+    For the latlng stream, latitude (data) and longitude (data2) are returned as separate arrays.
+
+    Args:
+        activity_id: The Intervals.icu activity ID
+        stream_types: Comma-separated list of stream types to retrieve (e.g. "latlng,bearing")
+        interval_seconds: Sample one point every N seconds (default 1800 = 30 min)
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+    """
+    params = {"types": stream_types}
+
+    result = await make_intervals_request(
+        url=f"/activity/{activity_id}/streams",
+        api_key=api_key,
+        params=params,
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error fetching activity streams: {error_message}"
+
+    if not result:
+        return f"No stream data found for activity {activity_id}."
+
+    streams = result if isinstance(result, list) else []
+    if not streams:
+        return f"No stream data found for activity {activity_id}."
+
+    # Find the time stream to map index -> elapsed seconds
+    time_data: list[int] = []
+    for stream in streams:
+        if isinstance(stream, dict) and stream.get("type") == "time":
+            time_data = stream.get("data", [])
+            break
+
+    # Build sample indices from the time stream
+    if time_data:
+        sample_indices = [i for i, t in enumerate(time_data) if t % interval_seconds == 0]
+        # Always include index 0
+        if not sample_indices or sample_indices[0] != 0:
+            sample_indices.insert(0, 0)
+    else:
+        # Fallback: sample by raw index if no time stream
+        total = max((len(s.get("data", [])) for s in streams if isinstance(s, dict)), default=0)
+        sample_indices = list(range(0, total, interval_seconds))
+
+    total_points = len(time_data) if time_data else 0
+    output: dict[str, Any] = {}
+
+    for stream in streams:
+        if not isinstance(stream, dict):
+            continue
+
+        stream_type = stream.get("type", "unknown")
+        data = stream.get("data", [])
+        data2 = stream.get("data2", [])
+
+        if stream_type == "time":
+            continue
+
+        sampled_data = [data[i] for i in sample_indices if i < len(data)]
+
+        if stream_type == "latlng":
+            sampled_data2 = [data2[i] for i in sample_indices if i < len(data2)]
+            output[stream_type] = {"lats": sampled_data, "lngs": sampled_data2}
+        elif data2:
+            sampled_data2 = [data2[i] for i in sample_indices if i < len(data2)]
+            output[stream_type] = {"data": sampled_data, "data2": sampled_data2}
+        else:
+            output[stream_type] = {"data": sampled_data}
+
+    output["interval_seconds"] = interval_seconds
+    output["total_points"] = total_points
+    output["sampled_points"] = len(sample_indices)
+
+    return json.dumps(output, indent=2)
