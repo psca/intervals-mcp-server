@@ -247,15 +247,31 @@ async def get_activity_streams(
 ) -> str:
     """Get stream data for a specific activity from Intervals.icu
 
-    This endpoint returns time-series data for an activity, including metrics like power, heart rate,
-    cadence, altitude, distance, temperature, and velocity data.
+    This endpoint returns time-series data for an activity. Only the default streams are returned
+    unless specific types are requested via stream_types.
 
     Args:
         activity_id: The Intervals.icu activity ID
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-        stream_types: Comma-separated list of stream types to retrieve (optional, defaults to all available types)
-                     Available types: time, watts, heartrate, cadence, altitude, distance,
-                     core_temperature, skin_temperature, velocity_smooth
+        stream_types: Comma-separated list of stream types to retrieve (optional).
+                     Defaults to: time, watts, heartrate, cadence, altitude, distance, velocity_smooth
+
+                     All available types (request only what you need):
+                       Core: time, watts, heartrate, cadence, distance, altitude, velocity_smooth
+                       Location: latlng (data=lat, data2=lng), bearing
+                       Derived: fixed_watts, raw_watts, fixed_heartrate, raw_heartrate, fixed_altitude
+                       Terrain: grade_smooth, moving, temp, torque
+                       Pedal: left_right_balance, left_pedal_smoothness, right_pedal_smoothness,
+                              left_torque_effectiveness, right_torque_effectiveness
+                       Physiology: smo2, thb, smo2_2, thb_2, dfa_a1, epoc, hrv,
+                                   core_temperature, skin_temperature, respiration,
+                                   tidal_volume, tidal_volume_min, bloodglucose, heat_strain_index
+                       Running: ga_velocity, stride_length
+                       Modeling: w_bal, mpa, strain, p_cp, p_pmax, p_wprime
+                       Power: watts_alt, watts_alt_acc, secondary_power
+                       Weather/wind: weather_temp, feels_like, wind_speed, wind_gust,
+                                     wind_deg, apparent_wind_deg, yaw
+                       Other: corrupt_time, artifacts
     """
     # Build query parameters
     params = {}
